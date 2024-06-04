@@ -1,0 +1,44 @@
+---
+title: "Project"
+author: "Jeremiah Fa'atiliga & Victoria (Tori) Widjaja"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+
+```{r libraries}
+#install.packages("gt")
+
+library(readr)
+library(caret)
+library(tidyverse)
+library(kernlab)
+library(tibble)
+library(ggplot2)
+library(purrr)
+#library(patchwork)
+#library(AppliedPredictiveModeling)
+library(gt)
+#library(randomForest)
+```
+
+```{r loading}
+# Load required libraries
+dir_prefix <- getwd()
+print(dir_prefix)
+
+# Connection info for GitHub File
+url <- paste(dir_prefix, 'healthcare-dataset-stroke-data.csv', sep ='/')
+df_orig <- read_csv(url)
+print(url)
+# Set up to automate files print location for team
+
+head(df_orig)
+```
