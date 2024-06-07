@@ -1,6 +1,6 @@
 ---
 title: "Project"
-author: "Jeremiah Fa'atiliga & Victoria (Tori) Widjaja"
+author: "Victoria (Tori) Widjaja & Jeremiah Fa'atiliga"
 date: "`r Sys.Date()`"
 output: html_document
 ---
@@ -10,8 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## R Markdown
-
-
 
 ```{r libraries}
 #install.packages("gt")
@@ -41,4 +39,71 @@ print(url)
 # Set up to automate files print location for team
 
 head(df_orig)
+```
+
+## Exploratory Data Analysis (EDA)
+
+```{r}
+###graphical and non-graphical representations of relationships between the response variable and predictor variables
+
+```
+
+## Data Wrangling and Pre-Processing
+
+```{r}
+###handling of missing values, outliers, correlated features, etc.
+```
+
+## Feature Selection
+
+```{r}
+
+```
+
+## Data Splitting - Training & Test
+
+```{r}
+###training, validation, and test sets
+```
+
+## Data Prep
+
+```{r}
+
+```
+
+## Models
+
+```{r}
+###model tuning and evaluation per and sum at the end
+```
+
+### Model #1 Baseline
+
+```{r}
+
+```
+
+### Model #2
+
+```{r}
+
+```
+
+### Model #3
+
+```{r}
+
+```
+
+### Model #4
+
+```{r}
+
+```
+
+### Results - Summary Table
+
+```{r}
+###use gt() table for all results
 ```
