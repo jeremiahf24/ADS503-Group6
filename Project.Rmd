@@ -13,6 +13,10 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r libraries}
 #install.packages("gt")
+#install.packages("skimr")
+#install.packages("gtsummary")
+
+
 
 library(readr)
 library(caret)
@@ -21,6 +25,10 @@ library(kernlab)
 library(tibble)
 library(ggplot2)
 library(purrr)
+library(dplyr)
+library(tidyr)
+library(skimr)
+library(gtsummary)
 #library(patchwork)
 #library(AppliedPredictiveModeling)
 library(gt)
@@ -28,23 +36,103 @@ library(gt)
 ```
 
 ```{r loading}
-# Load required libraries
+
 dir_prefix <- getwd()
 print(dir_prefix)
 
-# Connection info for GitHub File
+### Connection info for GitHub File
 url <- paste(dir_prefix, 'healthcare-dataset-stroke-data.csv', sep ='/')
 df_orig <- read_csv(url)
 print(url)
-# Set up to automate files print location for team
 
-head(df_orig)
+
+```
+
+```{r}
+
+str(df_orig)
+df_eda <- select(df_orig, -id)
+summary(df_eda)
+
+# Convert non-numeric values to NULL
+df_eda$bmi <- as.numeric(df_eda$bmi)
+
+# Assuming df_orig is your dataframe
+na_count <- colSums(is.na(df_eda) | is.null(df_eda))
+na_df <- data.frame(Column = names(na_count), NA_Count = na_count)
+tbl <- gt(na_df) %>% 
+  tab_header(title ="Count of NULL Values") %>%
+  fmt_number(
+    column = everything(),
+    decimals = 0
+  )
+
+tbl
 ```
 
 ## Exploratory Data Analysis (EDA)
 
 ```{r}
 ###graphical and non-graphical representations of relationships between the response variable and predictor variables
+
+
+# Calculate NA counts
+na_count <- colSums(is.na(df_orig) | is.null(df_orig))
+
+# Create a data frame from na_count
+na_df <- data.frame(Column = names(na_count), NA_Count = na_count)
+
+# Create gtsummary table
+tbl <- gt(na_df) %>%
+  tab_header(title = "Count of NA Values per Column") %>%
+  fmt_number(
+    columns = everything(),
+    decimals = 0
+  )
+
+# Print the table
+tbl
+
+
+
+
+
+```
+
+```{r}
+
+```
+
+```{df_eda <- select(df_orig, -id)}
+summary(df_eda)
+
+
+# Histograms for numeric variables
+ggplot(df_plots, aes(x = age)) +
+  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
+  labs(title = "Age Distribution", x = "Age", y = "Count")
+
+ggplot(df_plots, aes(x = avg_glucose_level)) +
+  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black") +
+  labs(title = "Average Glucose Level Distribution", x = "Average Glucose Level", y = "Count")
+
+ggplot(df_plots, aes(x = bmi)) +
+  geom_histogram(binwidth = 2, fill = "lightcoral", color = "black") +
+  labs(title = "BMI Distribution", x = "BMI", y = "Count")
+
+# Bar plot for binary variables
+ggplot(df_plots, aes(x = factor(hypertension))) +
+  geom_bar(fill = "lightblue", color = "black") +
+  labs(title = "hypertension Distribution", x = "hypertension", y = "Count")
+
+ggplot(df_plots, aes(x = factor(heart_disease))) +
+  geom_bar(fill = "lightpink", color = "black") +
+  labs(title = "Heart Disease Distribution", x = "Heart Disease", y = "Count")
+
+ggplot(df_plots, aes(x = factor(stroke))) +
+  geom_bar(fill = "lightyellow", color = "black") +
+  labs(title = "Stroke Distribution", x = "Stroke", y = "Count")
+
 
 ```
 
