@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("gt")
 #install.packages("skimr")
 #install.packages("gtsummary")
-
+#install.packages("GGally")
 
 
 library(readr)
@@ -29,6 +29,7 @@ library(dplyr)
 library(tidyr)
 library(skimr)
 library(gtsummary)
+library(GGally)
 #library(patchwork)
 #library(AppliedPredictiveModeling)
 library(gt)
@@ -48,98 +49,160 @@ print(url)
 
 ```
 
-```{r}
-
-str(df_orig)
-df_eda <- select(df_orig, -id)
-summary(df_eda)
-
-# Convert non-numeric values to NULL
-df_eda$bmi <- as.numeric(df_eda$bmi)
-
-# Assuming df_orig is your dataframe
-na_count <- colSums(is.na(df_eda) | is.null(df_eda))
-na_df <- data.frame(Column = names(na_count), NA_Count = na_count)
-tbl <- gt(na_df) %>% 
-  tab_header(title ="Count of NULL Values") %>%
-  fmt_number(
-    column = everything(),
-    decimals = 0
-  )
-
-tbl
-```
-
 ## Exploratory Data Analysis (EDA)
 
 ```{r}
 ###graphical and non-graphical representations of relationships between the response variable and predictor variables
 
 
-# Calculate NA counts
-na_count <- colSums(is.na(df_orig) | is.null(df_orig))
+```
 
-# Create a data frame from na_count
-na_df <- data.frame(Column = names(na_count), NA_Count = na_count)
+```{r warning=FALSE, message=FALSE}
 
-# Create gtsummary table
-tbl <- gt(na_df) %>%
-  tab_header(title = "Count of NA Values per Column") %>%
-  fmt_number(
-    columns = everything(),
-    decimals = 0
-  )
-
-# Print the table
-tbl
+df_eda <- select(df_orig, -id)
+summary(df_eda)
 
 
+# Filter out N/A values for bmi and convert to numeric
+df_eda <- df_eda %>%
+  filter(!is.na(bmi)) %>%
+  mutate(bmi = as.numeric(bmi))
 
+# Pivot longer and convert value column to numeric if possible
+df_long <- df_eda %>%
+  pivot_longer(-c(stroke, ever_married, gender, hypertension, heart_disease, Residence_type, work_type, smoking_status), names_to = "Variable", values_to = "value") %>%
+  mutate(value = as.numeric(value))
 
+# Plot histograms
+ggplot(df_long, aes(x = value)) +
+  geom_histogram(bins = 20) +
+  facet_wrap(~Variable, scales = "free", ncol = 2) + 
+  theme_bw() +
+  labs(title = 'Histograms of Variables Distributions', x = NULL, y = "Count")
+
+```
+
+```{r warning=FALSE, message=FALSE, fig.width=7,fig.height=6}
+
+numeric_df <- df_eda[sapply(df_eda, is.numeric)]
+
+numeric_df |>
+  ggpairs(title = "Relationship Between Predictors", progress = FALSE)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+
+stroke_percent <- prop.table(table(df_eda$stroke)) * 100
+barplot(stroke_percent, 
+        main = "Percentage of Strokes", 
+        xlab = "Stroke", 
+        ylab = "Percentage",
+        col = "lightblue",
+        ylim = c(0, max(stroke_percent) + 11),
+        names.arg = c("No Stroke", "Stroke"))
+
+label_pos <- stroke_percent + 1
+
+### Add labels
+text(x = 1:length(stroke_percent), 
+     y = label_pos, 
+     labels = paste0(round(stroke_percent, 2), "%"), 
+     pos = 3)
 
 ```
 
 ```{r}
 
-```
+non_numeric_columns <- names(df_eda)[sapply(df_eda, is.factor) | sapply(df_eda, is.character)]
 
-```{df_eda <- select(df_orig, -id)}
-summary(df_eda)
+plots_list <- map(non_numeric_columns, ~ {
+  col <- .x
+  
+  counts <- table(df_eda[[col]], df_eda$stroke)
+  counts_df <- as.data.frame(counts)
+  names(counts_df) <- c(col, "stroke", "count")
 
+  ggplot(counts_df, aes(x = !!sym(col), y = count, fill = factor(stroke))) +
+    geom_bar(stat = "identity") +
+    labs(x = col, y = "Count of Records", title = paste("Bar Graph of Stroke by", col)) +
+    facet_wrap(~stroke, scales = "free") +  # facet by stroke
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+})
 
-# Histograms for numeric variables
-ggplot(df_plots, aes(x = age)) +
-  geom_histogram(binwidth = 5, fill = "skyblue", color = "black") +
-  labs(title = "Age Distribution", x = "Age", y = "Count")
-
-ggplot(df_plots, aes(x = avg_glucose_level)) +
-  geom_histogram(binwidth = 10, fill = "lightgreen", color = "black") +
-  labs(title = "Average Glucose Level Distribution", x = "Average Glucose Level", y = "Count")
-
-ggplot(df_plots, aes(x = bmi)) +
-  geom_histogram(binwidth = 2, fill = "lightcoral", color = "black") +
-  labs(title = "BMI Distribution", x = "BMI", y = "Count")
-
-# Bar plot for binary variables
-ggplot(df_plots, aes(x = factor(hypertension))) +
-  geom_bar(fill = "lightblue", color = "black") +
-  labs(title = "hypertension Distribution", x = "hypertension", y = "Count")
-
-ggplot(df_plots, aes(x = factor(heart_disease))) +
-  geom_bar(fill = "lightpink", color = "black") +
-  labs(title = "Heart Disease Distribution", x = "Heart Disease", y = "Count")
-
-ggplot(df_plots, aes(x = factor(stroke))) +
-  geom_bar(fill = "lightyellow", color = "black") +
-  labs(title = "Stroke Distribution", x = "Stroke", y = "Count")
-
+walk(plots_list, print)
 
 ```
 
 ## Data Wrangling and Pre-Processing
 
 ```{r}
+summary_df <- tibble(
+  Variable = names(df_eda),
+  Missing_Values = colSums(is.na(df_eda))
+) %>%
+  arrange(desc(Missing_Values))
+
+###add a filter for high and low
+highest_missing <- summary_df %>%
+  filter(Missing_Values == max(Missing_Values))
+lowest_missing <- summary_df %>%
+  filter(Missing_Values == min(Missing_Values))
+
+### Combine the highest and lowest missing values
+result_df <- bind_rows(highest_missing, lowest_missing) %>%
+  filter(Variable != "stroke") %>%
+  gt() %>%
+  tab_header(title = "Summary of Missing Values") %>%
+  cols_label(
+    Variable = "Variable",
+    Missing_Values = "Count of Missing Values"
+  )
+
+### Print Out 
+result_df
+```
+
+colSums(is.na(df_eda))
+
+```{r}
 ###handling of missing values, outliers, correlated features, etc.
+
+###Imputing Missing BMI Values
+###Create age ranges
+df_eda <- df_eda %>%
+  mutate(age_range = cut(age, breaks = seq(0, max(age) + 10, by = 10),
+                        labels = paste0(seq(0, max(age), by = 10), "-", seq(9, max(age) + 9, by = 10))))
+
+# Calculate median "bmi" for each age range
+median_bmi <- df_eda %>%
+  group_by(age_range) %>%
+  summarise(median_bmi = median(bmi, na.rm = TRUE))
+
+# Join median_bmi with df_eda to impute missing "bmi" values
+df_eda <- df_eda %>%
+  left_join(median_bmi, by = "age_range") %>%
+  mutate(bmi = ifelse(is.na(bmi), median_bmi, bmi)) %>%
+  select(-median_bmi, -age_range)
+
+# Display first few rows of the updated dataframe
+head(df_eda)
+
+```
+
+```{r}
+
+na_counts <- colSums(is.na(df_eda))
+
+na_counts_df <- data.frame(variable = names(na_counts), na_count = na_counts)
+
+### gt() Table
+na_table <- na_counts_df %>%
+  gt() %>%
+  tab_header(title = "NA Counts in DataFrame") %>%
+  cols_label(variable = "Variable", na_count = "NA Count")
+
+na_table
 ```
 
 ## Feature Selection
