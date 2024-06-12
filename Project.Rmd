@@ -68,7 +68,7 @@ words words words
 ```{r warning=FALSE, message=FALSE}
 
 df_eda <- select(df_orig, -id)
-summary(df_eda)
+summary(df_eda)  ### put into a gt() Table???? #################################
 
 
 # Filter out N/A values for bmi and convert to numeric
@@ -122,30 +122,76 @@ text(x = 1:length(stroke_percent),
 ```
 
 ```{r}
-####add counts
+
+wrap_text <- function(x, width) {
+  sapply(strwrap(x, width = width, simplify = FALSE), paste, collapse = "\n")
+}
+
+# Select non-numeric columns
 non_numeric_columns <- names(df_eda)[sapply(df_eda, is.factor) | sapply(df_eda, is.character)]
 
-plots_list <- map(non_numeric_columns, ~ {
-  col <- .x
-  
+# Function to create plots
+create_plots <- function(col) {
   counts <- table(df_eda[[col]], df_eda$stroke)
   counts_df <- as.data.frame(counts)
   names(counts_df) <- c(col, "stroke", "count")
-
+  
   ggplot(counts_df, aes(x = !!sym(col), y = count, fill = factor(stroke))) +
-    geom_bar(stat = "identity") +
-    labs(x = col, y = "Count of Records", title = paste("Bar Graph of Stroke by", col)) +
-    facet_wrap(~stroke, scales = "free") +  ### facet by stroke
-    theme(axis.text.x = element_text(angle = 45, hjust = 1))  
-})
+    geom_bar(stat = "identity", position = "dodge") +
+    geom_text(aes(label = paste0(count)),
+              vjust = -0.5, size = 3, position = position_dodge(width = 0.9)) +  # Add count / percent labels
+    labs(x = col, y = "Count of Records", 
+         title = paste("Bar Graph of Stroke by", col, " by Count")) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          panel.spacing = unit(3, "lines"),
+          legend.text = element_text(size = 7),  # Adjust legend text size
+          legend.title = element_text(size = 9))  # Adjust legend title size
+}
 
+# Create plots for each non-numeric column
+plots_list <- map(non_numeric_columns, ~ create_plots(.x))
+
+# Print plots
 walk(plots_list, print)
 
 
 ```
 
 ```{r}
-##### HEAT MAP #### For Feature Selection 
+
+# Function to create plots
+create_plots <- function(col) {
+  counts <- table(df_eda[[col]], df_eda$stroke)
+  counts_df <- as.data.frame(counts)
+  names(counts_df) <- c(col, "stroke", "count")
+  
+  # Calculate percentages within each category
+  counts_df <- counts_df %>%
+    group_by(stroke) %>%
+    mutate(percent = count / sum(count) * 100) %>%
+    ungroup()
+  
+  ggplot(counts_df, aes(x = !!sym(col), y = percent, fill = factor(stroke))) +
+    geom_bar(stat = "identity") +
+    geom_text(aes(label = paste0(round(percent, 1), "%")),
+              vjust = -0.5, size = 3) +  # Add percent labels
+    labs(x = col, y = "Percentage of Records", 
+         title = paste("Bar Graph of Stroke by", col, "\nPercentage (Total Stroke Type %)")) +
+    facet_wrap(~stroke, scales = "free") +  # Facet by stroke
+    theme(axis.text.x = element_text(angle = 30, hjust = 1),
+          panel.spacing = unit(3, "lines")
+)}
+
+# Create plots for each non-numeric column
+plots_list <- map(non_numeric_columns, ~ create_plots(.x))
+
+# Print plots
+walk(plots_list, print)
+
+```
+
+```{r}
+##### HEAT MAP #### For Feature Selection ################################
 ```
 
 ## -Data Splitting - Training & Test
@@ -226,7 +272,7 @@ ctrl <- trainControl(method = "repeatedcv",
 
 ```{r}
 ### Base Model Logistic Regression Model
-
+### fix the name to be _ not . ##################################################
 # Fit logistic regression model
 lrm_base_model <- train(stroke ~ ., 
                       data = trainData_ready, 
