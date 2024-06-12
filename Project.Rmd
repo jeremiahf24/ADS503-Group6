@@ -16,6 +16,8 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("skimr")
 #install.packages("gtsummary")
 #install.packages("GGally")
+#install.packages("smotefamily")
+
 
 library(readr)
 library(caret)
@@ -32,10 +34,13 @@ library(GGally)
 library(plotmo)
 library(earth)
 library(corrplot)
+library(smotefamily)
 #library(patchwork)
 #library(AppliedPredictiveModeling)
 library(gt)
 #library(randomForest)
+
+seed <- 123
 ```
 
 ```{r loading, warning=FALSE, message=FALSE}
@@ -117,7 +122,7 @@ text(x = 1:length(stroke_percent),
 ```
 
 ```{r}
-
+####add counts
 non_numeric_columns <- names(df_eda)[sapply(df_eda, is.factor) | sapply(df_eda, is.character)]
 
 plots_list <- map(non_numeric_columns, ~ {
@@ -136,79 +141,109 @@ plots_list <- map(non_numeric_columns, ~ {
 
 walk(plots_list, print)
 
+
+```
+
+```{r}
+##### HEAT MAP #### For Feature Selection 
+```
+
+## -Data Splitting - Training & Test
+
+```{r}
+###training, validation, and test sets   
+###Split  
+trainIndex <- createDataPartition(df_eda$stroke, p = 0.8, ### saving 20% for test
+                                  list = FALSE,
+                                  times = 1)   
+
+# Subset data into training and testing sets  
+trainData <- df_eda[trainIndex, ]  
+testData <- df_eda[-trainIndex, ]
+
 ```
 
 ## Data Wrangling and Pre-Processing
 
 ```{r}
-summary_df <- tibble(
-  Variable = names(df_eda),
-  Missing_Values = colSums(is.na(df_eda))
-) %>%
-  arrange(desc(Missing_Values))
+# Check for missing data
+colSums(is.na(trainData))  #### Look for the N/A Values from other r doc####
 
-###add a filter for high and low
-highest_missing <- summary_df %>%
-  filter(Missing_Values == max(Missing_Values))
-lowest_missing <- summary_df %>%
-  filter(Missing_Values == min(Missing_Values))
+### bagImpute used because missing data is random
+bag_missing <- preProcess(trainData, method = "bagImpute")  ##### CHANGE? knn ??
+trainData <- predict(bag_missing, newdata = trainData)
 
-### Combine the highest and lowest missing values
-result_df <- bind_rows(highest_missing, lowest_missing) %>%
-  filter(Variable != "stroke") %>%
-  gt() %>%
-  tab_header(title = "Summary of Missing Values") %>%
-  cols_label(
-    Variable = "Variable",
-    Missing_Values = "Count of Missing Values"
-  )
+colSums(is.na(trainData))
 
-### Print Out 
-result_df
 ```
 
 ```{r}
-###handling of missing values, outliers, correlated features, etc.
+### Factor 
+non_numeric_cols <- sapply(trainData, function(x) !is.numeric(x))  
+# Convert non-numeric columns to factors 
+trainData <- trainData %>%   
+  mutate_if(non_numeric_cols, as.factor) 
+  
+str(trainData)
 
-###Imputing Missing BMI Values
-
-###Create age ranges
-df_eda <- df_eda %>%
-  mutate(age_range = cut(age, breaks = seq(0, max(age) + 10, by = 10),
-                        labels = paste0(seq(0, max(age), by = 10), "-", seq(9, max(age) + 9, by = 10))))
-
-# Calculate median "bmi" for each age range
-median_bmi <- df_eda %>%
-  group_by(age_range) %>%
-  summarise(median_bmi = median(bmi, na.rm = TRUE))
-median_bmi
 ```
 
 ```{r}
+### dummy variables for factors
+dummy_model1 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence_type + smoking_status, data = trainData)
 
-# Join median_bmi with df_eda to impute missing "bmi" values
-df_eda <- df_eda %>%
-  left_join(median_bmi, by = "age_range") %>%
-  mutate(bmi = ifelse(is.na(bmi), median_bmi, bmi)) %>%
-  select(-median_bmi, -age_range)
+trainData_dummy <- as.data.frame(predict(dummy_model1, newdata = trainData))
+trainData_dummy <- as.data.frame(lapply(trainData_dummy, as.factor))
+str(trainData_dummy)
+```
 
-# Display first few rows of the updated dataframe
-head(df_eda)
+```{r}
+### Dropping columns that can be inferred from the others to avoid multicollinearity 
+trainData_dummy <-select(trainData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
+
+str(trainData_dummy)
+trainData_selected <- select(trainData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
+str(trainData_selected)
+```
+
+```{r}
+trainData_ready <- cbind(trainData_dummy, trainData_selected)
+trainData_ready <- trainData_ready %>%
+  mutate(across(all_of(c("hypertension", "heart_disease", "stroke")), as.factor))
+str(trainData_ready)
+
 ```
 
 ```{r}
 
-na_counts <- colSums(is.na(df_eda))
+ctrl <- trainControl(method = "repeatedcv", 
+                     number = 10,  # folds for repetition
+                     repeats = 1,  ### change from 1 to 5
+                     verboseIter = FALSE, #print progress?
+                     classProbs = TRUE,       # Return class probabilities
+                     summaryFunction = twoClassSummary)  
+```
 
-na_counts_df <- data.frame(variable = names(na_counts), na_count = na_counts)
+```{r}
+### Base Model Logistic Regression Model
 
-### gt() Table
-na_table <- na_counts_df %>%
-  gt() %>%
-  tab_header(title = "NA Counts in DataFrame") %>%
-  cols_label(variable = "Variable", na_count = "NA Count")
+# Fit logistic regression model
+lrm_base_model <- train(stroke ~ ., 
+                      data = trainData_ready, 
+                      method = "glm", 
+                      family = "binomial",
+                      trControl = ctrl)
 
-na_table
+# View model summary
+summary(lrm_base_model)
+
+```
+
+```{r}
+
+```
+
+```{r}
 
 ```
 
@@ -219,31 +254,24 @@ df_feature_select$stroke <- as.factor(df_feature_select$stroke)
 str(df_feature_select)
 ```
 
-## Feature Selection
+## Feature Selection/Engineering
 
 ```{r}
-# Define the target variable and the features
-x <- df_feature_select[, setdiff(names(df_feature_select), "stroke")]
-y <- df_feature_select$stroke
 
-# Control parameters for RFE
-control <- rfeControl(functions = rfFuncs, method = "repeatedcv", number = 10)
 
-# Perform Recursive Feature Elimination (RFE)
-results <- rfe(x, 
-               y, 
-               sizes = c(1:5), 
-               rfeControl = control)
 
-# Print the results
-print(results)
-plot(results)
 ```
 
-## Data Splitting - Training & Test
+```{r}
+
+
+
+```
+
+## 
 
 ```{r}
-###training, validation, and test sets
+
 ```
 
 ## Data Prep
