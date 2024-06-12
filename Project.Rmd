@@ -35,6 +35,7 @@ library(plotmo)
 library(earth)
 library(corrplot)
 library(smotefamily)
+library(psych)
 #library(patchwork)
 #library(AppliedPredictiveModeling)
 library(gt)
@@ -52,8 +53,6 @@ print(dir_prefix)
 url <- paste(dir_prefix, 'healthcare-dataset-stroke-data.csv', sep ='/')
 df_orig <- read_csv(url)
 print(url)
-
-
 ```
 
 ## Exploratory Data Analysis (EDA)
@@ -61,15 +60,14 @@ print(url)
 ```{r}
 ###graphical and non-graphical representations of relationships between the response variable and predictor variables
 
+df_eda <- select(df_orig, -id)
+
+describe(df_eda)
 ```
 
 words words words
 
 ```{r warning=FALSE, message=FALSE}
-
-df_eda <- select(df_orig, -id)
-summary(df_eda)  ### put into a gt() Table???? #################################
-
 
 # Filter out N/A values for bmi and convert to numeric
 df_eda <- df_eda %>%
@@ -213,7 +211,7 @@ testData <- df_eda[-trainIndex, ]
 
 ```{r}
 # Check for missing data
-colSums(is.na(trainData))  #### Look for the N/A Values from other r doc####
+colSums(is.na(trainData))
 
 ### bagImpute used because missing data is random
 bag_missing <- preProcess(trainData, method = "bagImpute")  ##### CHANGE? knn ??
@@ -256,6 +254,9 @@ str(trainData_selected)
 trainData_ready <- cbind(trainData_dummy, trainData_selected)
 trainData_ready <- trainData_ready %>%
   mutate(across(all_of(c("hypertension", "heart_disease", "stroke")), as.factor))
+names(trainData_ready) <- gsub("\\.", "_", names(trainData_ready))
+names(trainData_ready) <- gsub("_Yes", "", names(trainData_ready))
+trainData_ready$stroke <- as.factor(make.names(as.character(trainData_ready$stroke)))
 str(trainData_ready)
 
 ```
@@ -263,22 +264,23 @@ str(trainData_ready)
 ```{r}
 
 ctrl <- trainControl(method = "repeatedcv", 
-                     number = 10,  # folds for repetition
-                     repeats = 1,  ### change from 1 to 5
-                     verboseIter = FALSE, #print progress?
-                     classProbs = TRUE,       # Return class probabilities
-                     summaryFunction = twoClassSummary)  
+                     number = 10,  
+                     repeats = 5,  # Increase to 5 as per your requirement
+                     verboseIter = FALSE,
+                     classProbs = TRUE,
+                     summaryFunction = twoClassSummary)
+
 ```
 
 ```{r}
 ### Base Model Logistic Regression Model
-### fix the name to be _ not . ##################################################
+
 # Fit logistic regression model
 lrm_base_model <- train(stroke ~ ., 
-                      data = trainData_ready, 
-                      method = "glm", 
-                      family = "binomial",
-                      trControl = ctrl)
+                        data = trainData_ready, 
+                        method = "glm", 
+                        family = "binomial",
+                        trControl = ctrl)
 
 # View model summary
 summary(lrm_base_model)
@@ -287,17 +289,6 @@ summary(lrm_base_model)
 
 ```{r}
 
-```
-
-```{r}
-
-```
-
-```{r}
-df_feature_select <- df_eda
-### Convert Stroke to factor
-df_feature_select$stroke <- as.factor(df_feature_select$stroke)
-str(df_feature_select)
 ```
 
 ## Feature Selection/Engineering
