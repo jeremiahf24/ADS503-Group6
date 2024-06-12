@@ -11,12 +11,11 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## R Markdown
 
-```{r libraries}
+```{r libraries, warning=FALSE, message=FALSE}
 #install.packages("gt")
 #install.packages("skimr")
 #install.packages("gtsummary")
 #install.packages("GGally")
-
 
 library(readr)
 library(caret)
@@ -30,13 +29,16 @@ library(tidyr)
 library(skimr)
 library(gtsummary)
 library(GGally)
+library(plotmo)
+library(earth)
+library(corrplot)
 #library(patchwork)
 #library(AppliedPredictiveModeling)
 library(gt)
 #library(randomForest)
 ```
 
-```{r loading}
+```{r loading, warning=FALSE, message=FALSE}
 
 dir_prefix <- getwd()
 print(dir_prefix)
@@ -54,8 +56,9 @@ print(url)
 ```{r}
 ###graphical and non-graphical representations of relationships between the response variable and predictor variables
 
-
 ```
+
+words words words
 
 ```{r warning=FALSE, message=FALSE}
 
@@ -94,6 +97,7 @@ numeric_df |>
 ```{r}
 
 stroke_percent <- prop.table(table(df_eda$stroke)) * 100
+
 barplot(stroke_percent, 
         main = "Percentage of Strokes", 
         xlab = "Stroke", 
@@ -126,7 +130,7 @@ plots_list <- map(non_numeric_columns, ~ {
   ggplot(counts_df, aes(x = !!sym(col), y = count, fill = factor(stroke))) +
     geom_bar(stat = "identity") +
     labs(x = col, y = "Count of Records", title = paste("Bar Graph of Stroke by", col)) +
-    facet_wrap(~stroke, scales = "free") +  # facet by stroke
+    facet_wrap(~stroke, scales = "free") +  ### facet by stroke
     theme(axis.text.x = element_text(angle = 45, hjust = 1))  
 })
 
@@ -163,12 +167,11 @@ result_df <- bind_rows(highest_missing, lowest_missing) %>%
 result_df
 ```
 
-colSums(is.na(df_eda))
-
 ```{r}
 ###handling of missing values, outliers, correlated features, etc.
 
 ###Imputing Missing BMI Values
+
 ###Create age ranges
 df_eda <- df_eda %>%
   mutate(age_range = cut(age, breaks = seq(0, max(age) + 10, by = 10),
@@ -178,6 +181,10 @@ df_eda <- df_eda %>%
 median_bmi <- df_eda %>%
   group_by(age_range) %>%
   summarise(median_bmi = median(bmi, na.rm = TRUE))
+median_bmi
+```
+
+```{r}
 
 # Join median_bmi with df_eda to impute missing "bmi" values
 df_eda <- df_eda %>%
@@ -187,7 +194,6 @@ df_eda <- df_eda %>%
 
 # Display first few rows of the updated dataframe
 head(df_eda)
-
 ```
 
 ```{r}
@@ -203,12 +209,35 @@ na_table <- na_counts_df %>%
   cols_label(variable = "Variable", na_count = "NA Count")
 
 na_table
+
+```
+
+```{r}
+df_feature_select <- df_eda
+### Convert Stroke to factor
+df_feature_select$stroke <- as.factor(df_feature_select$stroke)
+str(df_feature_select)
 ```
 
 ## Feature Selection
 
 ```{r}
+# Define the target variable and the features
+x <- df_feature_select[, setdiff(names(df_feature_select), "stroke")]
+y <- df_feature_select$stroke
 
+# Control parameters for RFE
+control <- rfeControl(functions = rfFuncs, method = "repeatedcv", number = 10)
+
+# Perform Recursive Feature Elimination (RFE)
+results <- rfe(x, 
+               y, 
+               sizes = c(1:5), 
+               rfeControl = control)
+
+# Print the results
+print(results)
+plot(results)
 ```
 
 ## Data Splitting - Training & Test
