@@ -190,6 +190,21 @@ walk(plots_list, print)
 
 ```{r}
 ##### HEAT MAP #### For Feature Selection ################################
+# Numeric Columns for EDA
+heatmap_data <- df_eda %>%
+  select(age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
+
+# Correlation Matrix
+correlation_matrix <- cor(heatmap_data, use = "pairwise.complete.obs")
+
+# Heatmap Plot
+ggplot(data = melt(correlation_matrix), aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "Light Blue", high = "Navy Blue") +
+  labs(x = "Features", y = "Features", title = "Stroke Heatmap") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 ```
 
 ## -Data Splitting - Training & Test
