@@ -36,6 +36,7 @@ library(earth)
 library(corrplot)
 library(smotefamily)
 library(psych)
+library(reshape2)
 #library(patchwork)
 #library(AppliedPredictiveModeling)
 library(gt)
@@ -232,6 +233,10 @@ colSums(is.na(trainData))
 bag_missing <- preProcess(trainData, method = "bagImpute")  ##### CHANGE? knn ??
 trainData <- predict(bag_missing, newdata = trainData)
 
+# bagImpute for Test Data
+bag_missing_test <- preProcess(trainData, method = "bagImpute")  ##### CHANGE? knn ??
+testData <- predict(bag_missing_test, newdata = testData)
+
 colSums(is.na(trainData))
 
 ```
@@ -242,7 +247,13 @@ non_numeric_cols <- sapply(trainData, function(x) !is.numeric(x))
 # Convert non-numeric columns to factors 
 trainData <- trainData %>%   
   mutate_if(non_numeric_cols, as.factor) 
-  
+
+### Factor Test 
+non_numeric_cols <- sapply(testData, function(x) !is.numeric(x))  
+# Convert non-numeric columns to factors Test
+testData <- testData %>%   
+  mutate_if(non_numeric_cols, as.factor) 
+
 str(trainData)
 
 ```
@@ -253,6 +264,13 @@ dummy_model1 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence
 
 trainData_dummy <- as.data.frame(predict(dummy_model1, newdata = trainData))
 trainData_dummy <- as.data.frame(lapply(trainData_dummy, as.factor))
+
+### dummy variables for test factors
+dummy_model2 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence_type + smoking_status, data = testData)
+
+testData_dummy <- as.data.frame(predict(dummy_model2, newdata = testData))
+testData_dummy <- as.data.frame(lapply(testData_dummy, as.factor))
+
 str(trainData_dummy)
 ```
 
@@ -263,9 +281,14 @@ trainData_dummy <-select(trainData_dummy, -gender.Female, -ever_married.No, -wor
 str(trainData_dummy)
 trainData_selected <- select(trainData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
 str(trainData_selected)
+
+### Test Dropping columns that can be inferred from the others to avoid multicollinearity 
+testData_dummy <-select(testData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
+testData_selected <- select(testData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
 ```
 
 ```{r}
+# Train
 trainData_ready <- cbind(trainData_dummy, trainData_selected)
 trainData_ready <- trainData_ready %>%
   mutate(across(all_of(c("hypertension", "heart_disease", "stroke")), as.factor))
@@ -274,10 +297,17 @@ names(trainData_ready) <- gsub("_Yes", "", names(trainData_ready))
 trainData_ready$stroke <- as.factor(make.names(as.character(trainData_ready$stroke)))
 str(trainData_ready)
 
+# Test
+testData_ready <- cbind(testData_dummy, testData_selected)
+testData_ready <- testData_ready %>%
+  mutate(across(all_of(c("hypertension", "heart_disease", "stroke")), as.factor))
+names(testData_ready) <- gsub("\\.", "_", names(testData_ready))
+names(testData_ready) <- gsub("_Yes", "", names(testData_ready))
+testData_ready$stroke <- as.factor(make.names(as.character(testData_ready$stroke)))
 ```
 
 ```{r}
-
+set.seed(123)
 ctrl <- trainControl(method = "repeatedcv", 
                      number = 10,  
                      repeats = 5,  # Increase to 5 as per your requirement
@@ -323,13 +353,24 @@ summary(lrm_base_model)
 ## 
 
 ```{r}
-
+trainData_ready
 ```
 
 ## Data Prep
 
 ```{r}
+# Exclude stroke and Identify and remove variables with zero variance
+Zero_Var_vars <- nearZeroVar(trainData_ready[, -which(names(trainData_ready) == "stroke"), drop = FALSE])
+trainData_ready <- trainData_ready[, -Zero_Var_vars, drop = FALSE]
 
+Zero_Var_vars2 <- nearZeroVar(testData_ready[, -which(names(testData_ready) == "stroke"), drop = FALSE])
+testData_ready <- testData_ready[, -Zero_Var_vars2, drop = FALSE]
+
+# Structure of Train Data
+str(trainData_ready)
+
+# Set up control parameters for training
+ctrl <- trainControl(method = 'cv', number = 10, classProbs = TRUE, summaryFunction = twoClassSummary)
 ```
 
 ## Models
@@ -341,29 +382,91 @@ summary(lrm_base_model)
 ### Model #1 Baseline
 
 ```{r}
-
+# Linear Discriminant Analysis
+ldaFit_stroke <- train(stroke ~ ., 
+                    data = trainData_ready,
+                    method = 'lda',
+                    metric = 'ROC',
+                    trControl = ctrl)
 ```
 
 ### Model #2
 
 ```{r}
+# Penalized Logistic Regression
+plrFit_stroke <- train(stroke ~ ., 
+                    data = trainData_ready,
+                    method = 'glmnet',
+                    preProc = c('center', 'scale'),
+                    metric = 'ROC',
+                    trControl = ctrl)
 
 ```
 
 ### Model #3
 
 ```{r}
-
+# Nearest Shrunken Centroids
+nscFit_stroke <- train(stroke ~ ., 
+                    data = trainData_ready,
+                    method = 'pam',
+                    preProc = c('center', 'scale'),
+                    metric = 'ROC',
+                    trControl = ctrl)
 ```
 
 ### Model #4
 
 ```{r}
-
+nnFit_stroke <- train(stroke ~ .,
+                      data = trainData_ready,
+                      method = 'nnet',
+                      maxit = 1000,
+                      preProcess = c('center', 'scale'),  
+                      metric = 'ROC',    
+                      trControl = ctrl)
 ```
 
 ### Results - Summary Table
 
 ```{r}
 ###use gt() table for all results
+# Make predictions for Linear Discriminant Analysis
+lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
+lda_cm <- confusionMatrix(lda_pred, testData_ready$stroke)
+
+# Make predictions for Penalized Logistic Regression
+plr_pred <- predict(plrFit_stroke, newdata = testData_ready)
+plr_cm <- confusionMatrix(plr_pred, testData_ready$stroke)
+
+# Make predictions for Nearest Shrunken Centroids
+nsc_pred <- predict(nscFit_stroke, newdata = testData_ready)
+nsc_cm <- confusionMatrix(nsc_pred, testData_ready$stroke)
+
+# Make predictions for Neural Network
+nn_pred <- predict(nnFit_stroke, newdata = testData_ready)
+nn_cm <- confusionMatrix(nn_pred, testData_ready$stroke)
+
+extract_accuracy <- function(model, cm) {
+  tibble(
+    model = model,
+    Accuracy = cm$overall['Accuracy'],
+    `CI Lower` = cm$overall['AccuracyLower'],
+    `CI Upper` = cm$overall['AccuracyUpper']
+  )
+}
+
+# Combine accuracies into a table
+accuracies <- bind_rows(
+  extract_accuracy('Linear Discriminant Analysis', lda_cm),
+  extract_accuracy('Penalized Logistic Regression', plr_cm),
+  extract_accuracy('Nearest Shrunken Centroids', nsc_cm),
+  extract_accuracy('Neural Network', nn_cm)
+)
+
+# Display the table using gt package
+accuracies %>%
+  arrange(-Accuracy) %>%
+  gt() %>%
+  fmt_number(columns = vars(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
 ```
