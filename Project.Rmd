@@ -350,11 +350,6 @@ summary(lrm_base_model)
 
 ```
 
-## 
-
-```{r}
-trainData_ready
-```
 
 ## Data Prep
 
@@ -407,8 +402,15 @@ plrFit_stroke <- train(stroke ~ .,
                     method = 'glmnet',
                     preProc = c('center', 'scale'),
                     metric = 'ROC',
-                    trControl = ctrl)
+                    trControl = ctrl,
+                    tuneLength = 5)
+
 plot(plrFit_stroke)
+
+# Best tuning parameters
+optimal_plr_tune <- plrFit_stroke$bestTune
+print(paste('Best Alpha and Lambda tuning parameters for Penalized Logistic Regression:', paste(optimal_plr_tune, collapse = ',')))
+
 ```
 
 ### Model #3
@@ -421,14 +423,18 @@ nscFit_stroke <- train(stroke ~ .,
                     method = 'pam',
                     preProc = c('center', 'scale'),
                     metric = 'ROC',
-                    trControl = ctrl)
+                    trControl = ctrl
+                    )
 plot(nscFit_stroke)
+
+# Best tuning parameters
+optimal_nsc_tune <- nscFit_stroke$bestTune
+print(paste('Best threshold tuning parameter for Nearest Shrunken Centroids:', paste(optimal_nsc_tune, collapse = ',')))
 ```
 
 ### Model #4
 
 ```{r}
-#### We need to suppress the text print out somehow.#####################
 set.seed(rseed)
 nnFit_stroke <- train(stroke ~ .,
                       data = trainData_ready,
@@ -436,8 +442,15 @@ nnFit_stroke <- train(stroke ~ .,
                       maxit = 1000,
                       preProcess = c('center', 'scale'),  
                       metric = 'ROC',    
-                      trControl = ctrl)
+                      trControl = ctrl,
+                      trace = FALSE)
+
 plot(nnFit_stroke)
+
+# Best tuning parameters
+optimal_nn_tune <- nnFit_stroke$bestTune
+print(paste('Best Size and Decay tuning parameters for Neural Network:', paste(optimal_nn_tune, collapse = ',')))
+
 ```
 
 ### Results - Summary Table
@@ -484,3 +497,105 @@ accuracies %>%
   fmt_number(columns = c(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
 
 ```
+
+
+### Tuned Models
+
+```{r}
+# Penalized Logistic Regression with optimal parameters
+plrFit_stroke2 <- train(stroke ~ ., 
+                       data = trainData_ready,
+                       method = 'glmnet',
+                       preProc = c('center', 'scale'),
+                       metric = 'ROC',
+                       trControl = ctrl,
+                       tuneGrid = expand.grid(
+                         alpha = optimal_plr_tune$alpha,
+                         lambda = optimal_plr_tune$lambda
+                       ))
+
+# Retrain NSC with optimal parameters
+nscFit_stroke2 <- train(stroke ~ ., 
+                        data = trainData_ready,
+                        method = 'pam',
+                        preProc = c('center', 'scale'),
+                        metric = 'ROC',
+                        trControl = ctrl,
+                        tuneGrid = expand.grid(
+                          threshold = optimal_nsc_tune$threshold
+                        ))
+
+# Retrain NN with optimal parameters
+nnFit_stroke2 <- train(stroke ~ .,
+                       data = trainData_ready,
+                       method = 'nnet',
+                       maxit = 1000,
+                       preProcess = c('center', 'scale'),  
+                       metric = 'ROC',    
+                       trControl = ctrl,
+                       tuneGrid = expand.grid(
+                         size = optimal_nn_tune$size,
+                         decay = optimal_nn_tune$decay
+                         ),
+                       trace = FALSE)
+```
+
+
+### Summary for Tuned Models
+```{r}
+# Make predictions for Linear Discriminant Analysis
+lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
+lda_cm <- confusionMatrix(lda_pred, testData_ready$stroke)
+
+# Make predictions for Penalized Logistic Regression
+plr_pred2 <- predict(plrFit_stroke2, newdata = testData_ready)
+plr_cm2 <- confusionMatrix(plr_pred2, testData_ready$stroke)
+
+# Make predictions for Nearest Shrunken Centroids
+nsc_pred2 <- predict(nscFit_stroke2, newdata = testData_ready)
+nsc_cm2 <- confusionMatrix(nsc_pred2, testData_ready$stroke)
+
+# Make predictions for Neural Network
+nn_pred2 <- predict(nnFit_stroke2, newdata = testData_ready)
+nn_cm2 <- confusionMatrix(nn_pred2, testData_ready$stroke)
+
+extract_accuracy <- function(model, cm) {
+  tibble(
+    model = model,
+    Accuracy = cm$overall['Accuracy'],
+    `CI Lower` = cm$overall['AccuracyLower'],
+    `CI Upper` = cm$overall['AccuracyUpper']
+  )
+}
+
+# Combine accuracies into a table
+accuracies <- bind_rows(
+  extract_accuracy('Linear Discriminant Analysis', lda_cm2),
+  extract_accuracy('Penalized Logistic Regression', plr_cm2),
+  extract_accuracy('Nearest Shrunken Centroids', nsc_cm2),
+  extract_accuracy('Neural Network', nn_cm2)
+)
+
+# Display the table using gt package
+accuracies %>%
+  arrange(-Accuracy) %>%
+  gt() %>%
+  fmt_number(columns = c(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
