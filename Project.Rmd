@@ -208,7 +208,7 @@ ggplot(data = melt(correlation_matrix), aes(x = Var1, y = Var2, fill = value)) +
 
 ```
 
-## -Data Splitting - Training & Test
+## Data Splitting - Training & Test
 
 ```{r}
 ###training, validation, and test sets   
@@ -370,7 +370,11 @@ testData_ready <- testData_ready[, -Zero_Var_vars2, drop = FALSE]
 str(trainData_ready)
 
 # Set up control parameters for training
-ctrl <- trainControl(method = 'cv', number = 10, classProbs = TRUE, summaryFunction = twoClassSummary)
+ctrl <- trainControl(method = 'repeatedcv', 
+                     repeats = 1, ### change when ready for final run to 5
+                     number = 10, 
+                     classProbs = TRUE, 
+                     summaryFunction = twoClassSummary)
 ```
 
 ## Models
@@ -382,17 +386,21 @@ ctrl <- trainControl(method = 'cv', number = 10, classProbs = TRUE, summaryFunct
 ### Model #1 Baseline
 
 ```{r}
+rseed <- 123
+set.seed(rseed)
 # Linear Discriminant Analysis
 ldaFit_stroke <- train(stroke ~ ., 
                     data = trainData_ready,
                     method = 'lda',
                     metric = 'ROC',
                     trControl = ctrl)
+
 ```
 
 ### Model #2
 
 ```{r}
+set.seed(rseed)
 # Penalized Logistic Regression
 plrFit_stroke <- train(stroke ~ ., 
                     data = trainData_ready,
@@ -400,12 +408,13 @@ plrFit_stroke <- train(stroke ~ .,
                     preProc = c('center', 'scale'),
                     metric = 'ROC',
                     trControl = ctrl)
-
+plot(plrFit_stroke)
 ```
 
 ### Model #3
 
 ```{r}
+set.seed(rseed)
 # Nearest Shrunken Centroids
 nscFit_stroke <- train(stroke ~ ., 
                     data = trainData_ready,
@@ -413,11 +422,14 @@ nscFit_stroke <- train(stroke ~ .,
                     preProc = c('center', 'scale'),
                     metric = 'ROC',
                     trControl = ctrl)
+plot(nscFit_stroke)
 ```
 
 ### Model #4
 
 ```{r}
+#### We need to suppress the text print out somehow.#####################
+set.seed(rseed)
 nnFit_stroke <- train(stroke ~ .,
                       data = trainData_ready,
                       method = 'nnet',
@@ -425,6 +437,7 @@ nnFit_stroke <- train(stroke ~ .,
                       preProcess = c('center', 'scale'),  
                       metric = 'ROC',    
                       trControl = ctrl)
+plot(nnFit_stroke)
 ```
 
 ### Results - Summary Table
@@ -468,5 +481,6 @@ accuracies <- bind_rows(
 accuracies %>%
   arrange(-Accuracy) %>%
   gt() %>%
-  fmt_number(columns = vars(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
+  fmt_number(columns = c(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
+
 ```
