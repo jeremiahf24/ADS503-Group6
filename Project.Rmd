@@ -19,28 +19,42 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("smotefamily")
 
 
-library(readr)
-library(caret)
-library(tidyverse)
-library(kernlab)
-library(tibble)
-library(ggplot2)
-library(purrr)
+# Core Data Manipulation Packages
 library(dplyr)
 library(tidyr)
-library(skimr)
-library(gtsummary)
+library(tibble)
+
+# Data Import Packages
+library(readr)
+
+# Tidyverse (loads ggplot2, dplyr, purrr, etc.)
+library(tidyverse)
+
+# Visualization Packages
+library(ggplot2)
 library(GGally)
-library(plotmo)
-library(earth)
 library(corrplot)
-library(smotefamily)
+library(plotmo)
+
+# Modeling Packages
+library(caret)
+library(kernlab)
+library(earth)
+#library(smotefamily)
+
+# EDA Packages
+library(skimr)
 library(psych)
 library(reshape2)
-#library(patchwork)
-#library(AppliedPredictiveModeling)
+library(gtsummary)
+
+# Additional Packages
 library(gt)
-#library(randomForest)
+# Commented out packages if not needed
+# library(patchwork)
+# library(AppliedPredictiveModeling)
+# library(randomForest)
+
 
 seed <- 123
 ```
@@ -54,6 +68,8 @@ print(dir_prefix)
 url <- paste(dir_prefix, 'healthcare-dataset-stroke-data.csv', sep ='/')
 df_orig <- read_csv(url)
 print(url)
+
+describe(df_orig)
 ```
 
 ## Exploratory Data Analysis (EDA)
@@ -61,9 +77,12 @@ print(url)
 ```{r}
 ###graphical and non-graphical representations of relationships between the response variable and predictor variables
 
-df_eda <- select(df_orig, -id)
+df_eda <- df_orig
 
-describe(df_eda)
+rownames(df_eda) <- df_eda$id
+df_eda <- dplyr::select(df_eda, -id)
+
+print(df_eda)
 ```
 
 words words words
@@ -350,7 +369,6 @@ summary(lrm_base_model)
 
 ```
 
-
 ## Data Prep
 
 ```{r}
@@ -387,23 +405,30 @@ set.seed(rseed)
 ldaFit_stroke <- train(stroke ~ ., 
                     data = trainData_ready,
                     method = 'lda',
+                    preProc = c("center","scale"),
                     metric = 'ROC',
                     trControl = ctrl)
-
+ldaFit_stroke
+ldaCM_stroke <- confusionMatrix(ldaFit_stroke, norm = "none")
+ldaCM_stroke
 ```
 
 ### Model #2
 
 ```{r}
 set.seed(rseed)
+
+glmnGrid <- expand.grid(alpha = c( .5, .6, 0.7),
+lambda = seq(.01, .2, length = 20))
+
 # Penalized Logistic Regression
 plrFit_stroke <- train(stroke ~ ., 
                     data = trainData_ready,
                     method = 'glmnet',
+                    tuneGrid = glmnGrid,
                     preProc = c('center', 'scale'),
                     metric = 'ROC',
-                    trControl = ctrl,
-                    tuneLength = 5)
+                    trControl = ctrl)
 
 plot(plrFit_stroke)
 
@@ -417,14 +442,17 @@ print(paste('Best Alpha and Lambda tuning parameters for Penalized Logistic Regr
 
 ```{r}
 set.seed(rseed)
+nscGrid <- data.frame(threshold = seq(2, 8.5, length = 20))
+
+
 # Nearest Shrunken Centroids
 nscFit_stroke <- train(stroke ~ ., 
                     data = trainData_ready,
                     method = 'pam',
                     preProc = c('center', 'scale'),
+                    tuneGrid = nscGrid,
                     metric = 'ROC',
-                    trControl = ctrl
-                    )
+                    trControl = ctrl)
 plot(nscFit_stroke)
 
 # Best tuning parameters
@@ -436,15 +464,19 @@ print(paste('Best threshold tuning parameter for Nearest Shrunken Centroids:', p
 
 ```{r}
 set.seed(rseed)
+
+grid <- expand.grid(size = c(1, 2, 3),     # Number of hidden units
+                    decay = c(0.05, 0.06, 0.07, 0.08))  # Weight decay
+
 nnFit_stroke <- train(stroke ~ .,
                       data = trainData_ready,
                       method = 'nnet',
-                      maxit = 1000,
+                      maxit = 500,
                       preProcess = c('center', 'scale'),  
                       metric = 'ROC',    
                       trControl = ctrl,
+                      tuneGrid = grid, 
                       trace = FALSE)
-
 plot(nnFit_stroke)
 
 # Best tuning parameters
@@ -498,7 +530,6 @@ accuracies %>%
 
 ```
 
-
 ### Tuned Models
 
 ```{r}
@@ -540,12 +571,12 @@ nnFit_stroke2 <- train(stroke ~ .,
                        trace = FALSE)
 ```
 
-
 ### Summary for Tuned Models
+
 ```{r}
 # Make predictions for Linear Discriminant Analysis
 lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
-lda_cm <- confusionMatrix(lda_pred, testData_ready$stroke)
+lda_cm2 <- confusionMatrix(lda_pred, testData_ready$stroke)
 
 # Make predictions for Penalized Logistic Regression
 plr_pred2 <- predict(plrFit_stroke2, newdata = testData_ready)
@@ -582,20 +613,3 @@ accuracies %>%
   gt() %>%
   fmt_number(columns = c(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
