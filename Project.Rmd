@@ -17,7 +17,7 @@ knitr::opts_chunk$set(echo = TRUE)
 #install.packages("gtsummary")
 #install.packages("GGally")
 #install.packages("smotefamily")
-
+#install.packages("gbm")
 
 # Core Data Manipulation Packages
 library(dplyr)
@@ -40,7 +40,7 @@ library(plotmo)
 library(caret)
 library(kernlab)
 library(earth)
-#library(smotefamily)
+library(gbm)
 
 # EDA Packages
 library(skimr)
@@ -50,6 +50,7 @@ library(gtsummary)
 
 # Additional Packages
 library(gt)
+
 # Commented out packages if not needed
 # library(patchwork)
 # library(AppliedPredictiveModeling)
@@ -385,7 +386,7 @@ str(trainData_ready)
 # Set up control parameters for training
 ctrl <- trainControl(method = 'repeatedcv', 
                      repeats = 1, ### change when ready for final run to 5
-                     number = 10, 
+                     number = 5, 
                      classProbs = TRUE, 
                      summaryFunction = twoClassSummary)
 ```
@@ -485,10 +486,40 @@ print(paste('Best Size and Decay tuning parameters for Neural Network:', paste(o
 
 ```
 
+### Model #5
+
+```{r}
+library(caret)
+
+# Set seed for reproducibility
+set.seed(rseed)
+
+
+rf_grid <- expand.grid(
+  mtry = c(9, 10, 11) 
+)
+
+rfFit_stroke <- train(
+  stroke ~ .,                   
+  data = trainData_ready, 
+  method = "rf", 
+  trControl = ctrl,
+  tuneGrid = rf_grid
+)
+
+# Print the best parameters and performance metrics
+print(rfFit_stroke)
+
+```
+
 ### Results - Summary Table
 
 ```{r}
 ###use gt() table for all results
+# Make predictions for Random Forest
+rf_pred <- predict(rfFit_stroke, newdata = testData_ready)
+rf_cm <- confusionMatrix(rf_pred, testData_ready$stroke)
+
 # Make predictions for Linear Discriminant Analysis
 lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
 lda_cm <- confusionMatrix(lda_pred, testData_ready$stroke)
@@ -516,6 +547,7 @@ extract_accuracy <- function(model, cm) {
 
 # Combine accuracies into a table
 accuracies <- bind_rows(
+  extract_accuracy('Random Forest', rf_cm),
   extract_accuracy('Linear Discriminant Analysis', lda_cm),
   extract_accuracy('Penalized Logistic Regression', plr_cm),
   extract_accuracy('Nearest Shrunken Centroids', nsc_cm),
