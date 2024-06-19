@@ -12,52 +12,26 @@ knitr::opts_chunk$set(echo = TRUE)
 ## R Markdown
 
 ```{r libraries, warning=FALSE, message=FALSE}
-#install.packages("gt")
-#install.packages("skimr")
-#install.packages("gtsummary")
-#install.packages("GGally")
-#install.packages("smotefamily")
-#install.packages("gbm")
-
-# Core Data Manipulation Packages
 library(dplyr)
 library(tidyr)
 library(tibble)
-
-# Data Import Packages
 library(readr)
-
-# Tidyverse (loads ggplot2, dplyr, purrr, etc.)
 library(tidyverse)
-
-# Visualization Packages
 library(ggplot2)
 library(GGally)
 library(corrplot)
 library(plotmo)
-
-# Modeling Packages
 library(caret)
 library(kernlab)
 library(earth)
-library(gbm)
-
-# EDA Packages
 library(skimr)
 library(psych)
 library(reshape2)
-library(gtsummary)
-
-# Additional Packages
 library(gt)
-
-# Commented out packages if not needed
-# library(patchwork)
-# library(AppliedPredictiveModeling)
-# library(randomForest)
+library(ROSE)
 
 
-seed <- 123
+rseed <- 123
 ```
 
 ```{r loading, warning=FALSE, message=FALSE}
@@ -85,7 +59,7 @@ df_eda <- dplyr::select(df_eda, -id)
 
 print(df_eda)
 ```
-
+### Histograms
 words words words
 
 ```{r warning=FALSE, message=FALSE}
@@ -108,7 +82,7 @@ ggplot(df_long, aes(x = value)) +
   labs(title = 'Histograms of Variables Distributions', x = NULL, y = "Count")
 
 ```
-
+### Corrplot
 ```{r warning=FALSE, message=FALSE, fig.width=7,fig.height=6}
 
 numeric_df <- df_eda[sapply(df_eda, is.numeric)]
@@ -117,7 +91,7 @@ numeric_df |>
   ggpairs(title = "Relationship Between Predictors", progress = FALSE)+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
-
+### Class Balance
 ```{r}
 
 stroke_percent <- prop.table(table(df_eda$stroke)) * 100
@@ -139,7 +113,7 @@ text(x = 1:length(stroke_percent),
      pos = 3)
 
 ```
-
+### Distributions of Values (Counts)
 ```{r}
 
 wrap_text <- function(x, width) {
@@ -175,7 +149,7 @@ walk(plots_list, print)
 
 
 ```
-
+### Distributions of Values (Percentages)
 ```{r}
 
 # Function to create plots
@@ -208,7 +182,7 @@ plots_list <- map(non_numeric_columns, ~ create_plots(.x))
 walk(plots_list, print)
 
 ```
-
+### Heatmap
 ```{r}
 ##### HEAT MAP #### For Feature Selection ################################
 # Numeric Columns for EDA
@@ -244,25 +218,41 @@ testData <- df_eda[-trainIndex, ]
 ```
 
 ## Data Wrangling and Pre-Processing
-
+### Missing Values
 ```{r}
+table(trainData$gender)
+
+
+trainData$gender[trainData$gender == "Other"] <- {
+  ux <- unique(trainData$gender)
+  mode_gender <- ux[which.max(tabulate(match(trainData$gender, ux)))]
+  mode_gender
+}
+
+testData$gender[testData$gender == "Other"] <- {
+  ux <- unique(testData$gender)
+  mode_gender <- ux[which.max(tabulate(match(testData$gender, ux)))]
+  mode_gender
+}
+table(trainData$gender)
+
 # Check for missing data
-colSums(is.na(trainData))
+colSums(is.na(trainData)) 
 
 ### bagImpute used because missing data is random
 bag_missing <- preProcess(trainData, method = "bagImpute")  ##### CHANGE? knn ??
 trainData <- predict(bag_missing, newdata = trainData)
 
 # bagImpute for Test Data
-bag_missing_test <- preProcess(trainData, method = "bagImpute")  ##### CHANGE? knn ??
-testData <- predict(bag_missing_test, newdata = testData)
+testData <- predict(bag_missing, newdata = testData)
 
 colSums(is.na(trainData))
 
 ```
 
+### Setting up Factors
 ```{r}
-### Factor 
+### Factor Train
 non_numeric_cols <- sapply(trainData, function(x) !is.numeric(x))  
 # Convert non-numeric columns to factors 
 trainData <- trainData %>%   
@@ -277,9 +267,9 @@ testData <- testData %>%
 str(trainData)
 
 ```
-
+### Dummy Variables
 ```{r}
-### dummy variables for factors
+### dummy variables for Trfactors
 dummy_model1 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence_type + smoking_status, data = trainData)
 
 trainData_dummy <- as.data.frame(predict(dummy_model1, newdata = trainData))
@@ -291,14 +281,13 @@ dummy_model2 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence
 testData_dummy <- as.data.frame(predict(dummy_model2, newdata = testData))
 testData_dummy <- as.data.frame(lapply(testData_dummy, as.factor))
 
-str(trainData_dummy)
+head(trainData_dummy)
 ```
-
 ```{r}
 ### Dropping columns that can be inferred from the others to avoid multicollinearity 
 trainData_dummy <-select(trainData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
 
-str(trainData_dummy)
+head(trainData_dummy)
 trainData_selected <- select(trainData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
 str(trainData_selected)
 
@@ -306,7 +295,6 @@ str(trainData_selected)
 testData_dummy <-select(testData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
 testData_selected <- select(testData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
 ```
-
 ```{r}
 # Train
 trainData_ready <- cbind(trainData_dummy, trainData_selected)
@@ -315,7 +303,7 @@ trainData_ready <- trainData_ready %>%
 names(trainData_ready) <- gsub("\\.", "_", names(trainData_ready))
 names(trainData_ready) <- gsub("_Yes", "", names(trainData_ready))
 trainData_ready$stroke <- as.factor(make.names(as.character(trainData_ready$stroke)))
-str(trainData_ready)
+head(trainData_ready)
 
 # Test
 testData_ready <- cbind(testData_dummy, testData_selected)
@@ -325,12 +313,61 @@ names(testData_ready) <- gsub("\\.", "_", names(testData_ready))
 names(testData_ready) <- gsub("_Yes", "", names(testData_ready))
 testData_ready$stroke <- as.factor(make.names(as.character(testData_ready$stroke)))
 ```
+### Class Imbalance (ROSE Method)
+```{r}
+# Calculate counts and convert to data frame
+stroke_counts <- as.data.frame(table(trainData_ready$stroke))
+colnames(stroke_counts) <- c("Stroke", "Count")
+stroke_counts$Stroke <- factor(stroke_counts$Stroke, levels = c('X0', 'X1'), labels = c("No Stroke", "Stroke"))
+
+### Bar Chart
+ggplot(stroke_counts, aes(x = Stroke, y = Count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Count of Stroke Values",
+       x = "Stroke",
+       y = "Count") +
+  geom_text(aes(label = Count), 
+            vjust = -0.5,  # Position above the bars
+            size = 3,  # Size of the text
+            color = "black")  # Color of the text
+```
 
 ```{r}
+set.seed(rseed)
+
+# Apply ROSE to balance the dataset
+rose_train <- ROSE(stroke ~ ., data = trainData_ready)$data
+
+# Separate predictors (features) and target variable (stroke)
+train_X <- rose_train[, !(names(rose_train) %in% "stroke")]
+train_y <- rose_train$stroke
+
+train_y_df <- data.frame(stroke = train_y)
+
+stroke_counts <- as.data.frame(table(train_y_df$stroke))
+colnames(stroke_counts) <- c("Stroke", "Count")
+stroke_counts$Stroke <- factor(stroke_counts$Stroke, 
+                               levels = c('X0', 'X1'), labels = c("No Stroke", "Stroke"))
+### Bar chart
+ggplot(stroke_counts, aes(x = Stroke, y = Count)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Count of Stroke Values in Balanced Dataset",
+       x = "Stroke",
+       y = "Count") +
+  geom_text(aes(label = Count), 
+            vjust = -0.5,  
+            size = 3,  
+            color = "black")  
+
+trainData_ready <- data.frame(rose_train)
+```
+### Baseline Model to Beat
+```{r}
 set.seed(123)
+### Parameters for Tuning
 ctrl <- trainControl(method = "repeatedcv", 
-                     number = 10,  
-                     repeats = 5,  # Increase to 5 as per your requirement
+                     number = 5,  
+                     repeats = 5,  
                      verboseIter = FALSE,
                      classProbs = TRUE,
                      summaryFunction = twoClassSummary)
@@ -352,26 +389,7 @@ summary(lrm_base_model)
 
 ```
 
-```{r}
-
-```
-
-## Feature Selection/Engineering
-
-```{r}
-
-
-
-```
-
-```{r}
-
-
-
-```
-
 ## Data Prep
-
 ```{r}
 # Exclude stroke and Identify and remove variables with zero variance
 Zero_Var_vars <- nearZeroVar(trainData_ready[, -which(names(trainData_ready) == "stroke"), drop = FALSE])
@@ -382,22 +400,10 @@ testData_ready <- testData_ready[, -Zero_Var_vars2, drop = FALSE]
 
 # Structure of Train Data
 str(trainData_ready)
-
-# Set up control parameters for training
-ctrl <- trainControl(method = 'repeatedcv', 
-                     repeats = 1, ### change when ready for final run to 5
-                     number = 5, 
-                     classProbs = TRUE, 
-                     summaryFunction = twoClassSummary)
 ```
 
 ## Models
-
-```{r}
-###model tuning and evaluation per and sum at the end
-```
-
-### Model #1 Baseline
+### Model #1 - Linear Discriminant Analysis (LDR)
 
 ```{r}
 rseed <- 123
@@ -414,13 +420,13 @@ ldaCM_stroke <- confusionMatrix(ldaFit_stroke, norm = "none")
 ldaCM_stroke
 ```
 
-### Model #2
+### Model #2 - Penalized Logistic Regression (PLR)
 
 ```{r}
 set.seed(rseed)
 
-glmnGrid <- expand.grid(alpha = c( .5, .6, 0.7),
-lambda = seq(.01, .2, length = 20))
+glmnGrid <- expand.grid(alpha = c( 0, .5, 1),
+lambda = seq(.001, 2, length = 20))
 
 # Penalized Logistic Regression
 plrFit_stroke <- train(stroke ~ ., 
@@ -439,11 +445,11 @@ print(paste('Best Alpha and Lambda tuning parameters for Penalized Logistic Regr
 
 ```
 
-### Model #3
+### Model #3 - Nearest Shrunken Centroids
 
 ```{r}
 set.seed(rseed)
-nscGrid <- data.frame(threshold = seq(2, 8.5, length = 20))
+nscGrid <- data.frame(threshold = seq(2, 7, length = 20))
 
 
 # Nearest Shrunken Centroids
@@ -461,14 +467,14 @@ optimal_nsc_tune <- nscFit_stroke$bestTune
 print(paste('Best threshold tuning parameter for Nearest Shrunken Centroids:', paste(optimal_nsc_tune, collapse = ',')))
 ```
 
-### Model #4
+### Model #4 - Neural Network
 
 ```{r}
 set.seed(rseed)
 
-grid <- expand.grid(size = c(1, 2, 3),     # Number of hidden units
-                    decay = c(0.05, 0.06, 0.07, 0.08))  # Weight decay
-
+grid <- expand.grid(size = c(1, 5, 10),     # Number of hidden units
+                    decay = c( 0.01, 0.05, .1))  # Weight decay
+# Neural Networks
 nnFit_stroke <- train(stroke ~ .,
                       data = trainData_ready,
                       method = 'nnet',
@@ -486,17 +492,15 @@ print(paste('Best Size and Decay tuning parameters for Neural Network:', paste(o
 
 ```
 
-### Model #5
+### Model #5 - Random Forest
 
 ```{r}
-library(caret)
-
 # Set seed for reproducibility
 set.seed(rseed)
 
-
+# Random Forest
 rf_grid <- expand.grid(
-  mtry = c(9, 10, 11) 
+  mtry = c(2, 4, 6, 8) 
 )
 
 rfFit_stroke <- train(
@@ -508,33 +512,37 @@ rfFit_stroke <- train(
 )
 
 # Print the best parameters and performance metrics
-print(rfFit_stroke)
+plot(rfFit_stroke)
 
+# Best tuning parameters
+optimal_rf_tune <- rfFit_stroke$bestTune
+print(paste('Best Size and Decay tuning parameters for Random Forest:', paste(rfFit_stroke, collapse = ',')))
 ```
 
-### Results - Summary Table
+## Results - Summary Table
 
 ```{r}
 ###use gt() table for all results
-# Make predictions for Random Forest
-rf_pred <- predict(rfFit_stroke, newdata = testData_ready)
-rf_cm <- confusionMatrix(rf_pred, testData_ready$stroke)
 
-# Make predictions for Linear Discriminant Analysis
+# 1.Make predictions for Linear Discriminant Analysis
 lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
 lda_cm <- confusionMatrix(lda_pred, testData_ready$stroke)
 
-# Make predictions for Penalized Logistic Regression
+# 2.Make predictions for Penalized Logistic Regression
 plr_pred <- predict(plrFit_stroke, newdata = testData_ready)
 plr_cm <- confusionMatrix(plr_pred, testData_ready$stroke)
 
-# Make predictions for Nearest Shrunken Centroids
+# 3.Make predictions for Nearest Shrunken Centroids
 nsc_pred <- predict(nscFit_stroke, newdata = testData_ready)
 nsc_cm <- confusionMatrix(nsc_pred, testData_ready$stroke)
 
-# Make predictions for Neural Network
+# 4.Make predictions for Neural Network
 nn_pred <- predict(nnFit_stroke, newdata = testData_ready)
 nn_cm <- confusionMatrix(nn_pred, testData_ready$stroke)
+
+# 5.Make predictions for Random Forest
+rf_pred <- predict(rfFit_stroke, newdata = testData_ready)
+rf_cm <- confusionMatrix(rf_pred, testData_ready$stroke)
 
 extract_accuracy <- function(model, cm) {
   tibble(
@@ -601,6 +609,17 @@ nnFit_stroke2 <- train(stroke ~ .,
                          decay = optimal_nn_tune$decay
                          ),
                        trace = FALSE)
+
+# Retrain RF with optimal parameters
+rfFit_stroke <- train(stroke ~ .,
+                      data = trainData_ready, 
+                      method = "rf", 
+                      trControl = ctrl,
+                      tuneGrid = expand.grid(
+                         size = optimal_nn_tune$size,
+                         decay = optimal_nn_tune$decay
+                         ))
+
 ```
 
 ### Summary for Tuned Models
