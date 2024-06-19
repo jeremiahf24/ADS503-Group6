@@ -2,7 +2,9 @@
 title: "Project"
 author: "Victoria (Tori) Widjaja & Jeremiah Fa'atiliga"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -60,7 +62,6 @@ df_eda <- dplyr::select(df_eda, -id)
 print(df_eda)
 ```
 ### Histograms
-words words words
 
 ```{r warning=FALSE, message=FALSE}
 
@@ -222,7 +223,6 @@ testData <- df_eda[-trainIndex, ]
 ```{r}
 table(trainData$gender)
 
-
 trainData$gender[trainData$gender == "Other"] <- {
   ux <- unique(trainData$gender)
   mode_gender <- ux[which.max(tabulate(match(trainData$gender, ux)))]
@@ -265,6 +265,7 @@ testData <- testData %>%
   mutate_if(non_numeric_cols, as.factor) 
 
 str(trainData)
+str(testData)
 
 ```
 ### Dummy Variables
@@ -282,18 +283,20 @@ testData_dummy <- as.data.frame(predict(dummy_model2, newdata = testData))
 testData_dummy <- as.data.frame(lapply(testData_dummy, as.factor))
 
 head(trainData_dummy)
+head(testData_dummy)
 ```
 ```{r}
 ### Dropping columns that can be inferred from the others to avoid multicollinearity 
 trainData_dummy <-select(trainData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
 
-head(trainData_dummy)
+#head(trainData_dummy)
 trainData_selected <- select(trainData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
-str(trainData_selected)
+#str(trainData_selected)
 
 ### Test Dropping columns that can be inferred from the others to avoid multicollinearity 
 testData_dummy <-select(testData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
 testData_selected <- select(testData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
+#str(testData_dummy)
 ```
 ```{r}
 # Train
@@ -312,6 +315,7 @@ testData_ready <- testData_ready %>%
 names(testData_ready) <- gsub("\\.", "_", names(testData_ready))
 names(testData_ready) <- gsub("_Yes", "", names(testData_ready))
 testData_ready$stroke <- as.factor(make.names(as.character(testData_ready$stroke)))
+str(testData_ready)
 ```
 ### Class Imbalance (ROSE Method)
 ```{r}
@@ -367,7 +371,7 @@ set.seed(123)
 ### Parameters for Tuning
 ctrl <- trainControl(method = "repeatedcv", 
                      number = 5,  
-                     repeats = 5,  
+                     repeats = 3,  
                      verboseIter = FALSE,
                      classProbs = TRUE,
                      summaryFunction = twoClassSummary)
@@ -394,12 +398,7 @@ summary(lrm_base_model)
 # Exclude stroke and Identify and remove variables with zero variance
 Zero_Var_vars <- nearZeroVar(trainData_ready[, -which(names(trainData_ready) == "stroke"), drop = FALSE])
 trainData_ready <- trainData_ready[, -Zero_Var_vars, drop = FALSE]
-
-Zero_Var_vars2 <- nearZeroVar(testData_ready[, -which(names(testData_ready) == "stroke"), drop = FALSE])
-testData_ready <- testData_ready[, -Zero_Var_vars2, drop = FALSE]
-
-# Structure of Train Data
-str(trainData_ready)
+print(names(Zero_Var_vars))
 ```
 
 ## Models
@@ -472,7 +471,7 @@ print(paste('Best threshold tuning parameter for Nearest Shrunken Centroids:', p
 ```{r}
 set.seed(rseed)
 
-grid <- expand.grid(size = c(1, 5, 10),     # Number of hidden units
+grid <- expand.grid(size = c(1, 5, 8),     # Number of hidden units
                     decay = c( 0.01, 0.05, .1))  # Weight decay
 # Neural Networks
 nnFit_stroke <- train(stroke ~ .,
@@ -500,7 +499,7 @@ set.seed(rseed)
 
 # Random Forest
 rf_grid <- expand.grid(
-  mtry = c(2, 4, 6, 8) 
+  mtry = c(2, 4, 6)
 )
 
 rfFit_stroke <- train(
@@ -508,7 +507,9 @@ rfFit_stroke <- train(
   data = trainData_ready, 
   method = "rf", 
   trControl = ctrl,
-  tuneGrid = rf_grid
+  tuneGrid = rf_grid,
+  ntree = 100,
+  trace = FALSE
 )
 
 # Print the best parameters and performance metrics
@@ -555,11 +556,11 @@ extract_accuracy <- function(model, cm) {
 
 # Combine accuracies into a table
 accuracies <- bind_rows(
-  extract_accuracy('Random Forest', rf_cm),
   extract_accuracy('Linear Discriminant Analysis', lda_cm),
   extract_accuracy('Penalized Logistic Regression', plr_cm),
   extract_accuracy('Nearest Shrunken Centroids', nsc_cm),
-  extract_accuracy('Neural Network', nn_cm)
+  extract_accuracy('Neural Network', nn_cm),
+  extract_accuracy('Random Forest', rf_cm)
 )
 
 # Display the table using gt package
@@ -573,8 +574,9 @@ accuracies %>%
 ### Tuned Models
 
 ```{r}
+set.seed(rseed)
 # Penalized Logistic Regression with optimal parameters
-plrFit_stroke2 <- train(stroke ~ ., 
+plrFit_final <- train(stroke ~ ., 
                        data = trainData_ready,
                        method = 'glmnet',
                        preProc = c('center', 'scale'),
@@ -584,9 +586,9 @@ plrFit_stroke2 <- train(stroke ~ .,
                          alpha = optimal_plr_tune$alpha,
                          lambda = optimal_plr_tune$lambda
                        ))
-
+set.seed(rseed)
 # Retrain NSC with optimal parameters
-nscFit_stroke2 <- train(stroke ~ ., 
+nscFit_final <- train(stroke ~ ., 
                         data = trainData_ready,
                         method = 'pam',
                         preProc = c('center', 'scale'),
@@ -595,9 +597,9 @@ nscFit_stroke2 <- train(stroke ~ .,
                         tuneGrid = expand.grid(
                           threshold = optimal_nsc_tune$threshold
                         ))
-
+set.seed(rseed)
 # Retrain NN with optimal parameters
-nnFit_stroke2 <- train(stroke ~ .,
+nnFit_final <- train(stroke ~ .,
                        data = trainData_ready,
                        method = 'nnet',
                        maxit = 1000,
@@ -609,15 +611,14 @@ nnFit_stroke2 <- train(stroke ~ .,
                          decay = optimal_nn_tune$decay
                          ),
                        trace = FALSE)
-
+set.seed(rseed)
 # Retrain RF with optimal parameters
-rfFit_stroke <- train(stroke ~ .,
+rfFit_final <- train(stroke ~ .,
                       data = trainData_ready, 
                       method = "rf", 
                       trControl = ctrl,
                       tuneGrid = expand.grid(
-                         size = optimal_nn_tune$size,
-                         decay = optimal_nn_tune$decay
+                         mtry = optimal_rf_tune$mtry
                          ))
 
 ```
@@ -625,21 +626,27 @@ rfFit_stroke <- train(stroke ~ .,
 ### Summary for Tuned Models
 
 ```{r}
+set.seed(rseed)
 # Make predictions for Linear Discriminant Analysis
 lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
 lda_cm2 <- confusionMatrix(lda_pred, testData_ready$stroke)
 
 # Make predictions for Penalized Logistic Regression
-plr_pred2 <- predict(plrFit_stroke2, newdata = testData_ready)
+plr_pred2 <- predict(plrFit_final, newdata = testData_ready)
 plr_cm2 <- confusionMatrix(plr_pred2, testData_ready$stroke)
 
 # Make predictions for Nearest Shrunken Centroids
-nsc_pred2 <- predict(nscFit_stroke2, newdata = testData_ready)
+nsc_pred2 <- predict(nscFit_final, newdata = testData_ready)
 nsc_cm2 <- confusionMatrix(nsc_pred2, testData_ready$stroke)
 
 # Make predictions for Neural Network
-nn_pred2 <- predict(nnFit_stroke2, newdata = testData_ready)
+nn_pred2 <- predict(nnFit_final, newdata = testData_ready)
 nn_cm2 <- confusionMatrix(nn_pred2, testData_ready$stroke)
+
+# Make predictions for Random Forest
+rf_pred2 <- predict(rfFit_final, newdata = testData_ready)
+rf_cm2 <- confusionMatrix(rf_pred2, testData_ready$stroke)
+
 
 extract_accuracy <- function(model, cm) {
   tibble(
@@ -655,7 +662,8 @@ accuracies <- bind_rows(
   extract_accuracy('Linear Discriminant Analysis', lda_cm2),
   extract_accuracy('Penalized Logistic Regression', plr_cm2),
   extract_accuracy('Nearest Shrunken Centroids', nsc_cm2),
-  extract_accuracy('Neural Network', nn_cm2)
+  extract_accuracy('Neural Network', nn_cm2),
+  extract_accuracy('Random Forest', rf_cm2),
 )
 
 # Display the table using gt package
