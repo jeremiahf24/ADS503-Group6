@@ -452,8 +452,11 @@ ldaFit_stroke <- train(stroke ~ .,
                     metric = 'ROC',
                     trControl = ctrl)
 ldaFit_stroke
+# LDA Predictions
+predictions <- predict(ldaFit_stroke, newdata = trainData_ready)
+
 # LDA Confusion Matrix
-ldaCM_stroke <- confusionMatrix(ldaFit_stroke, norm = "none")
+ldaCM_stroke <- confusionMatrix(predictions, trainData_ready$stroke)
 
 # Confusion Matrix Plot
 conf_matrix <- as.data.frame(ldaCM_stroke$table)
@@ -721,4 +724,11 @@ accuracies %>%
   arrange(-Accuracy) %>%
   gt() %>%
   fmt_number(columns = c(Accuracy, `CI Lower`, `CI Upper`), decimals = 3)
+```
+
+## Final Model
+```{r}
+rfFit_final$finalModel
+
+
 ```
