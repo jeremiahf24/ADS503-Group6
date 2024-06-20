@@ -3,8 +3,8 @@ title: "Project"
 author: "Victoria (Tori) Widjaja & Jeremiah Fa'atiliga"
 date: "`r Sys.Date()`"
 output:
-  pdf_document: default
   html_document: default
+  pdf_document: default
 ---
 
 
@@ -389,7 +389,7 @@ trainData_ready <- data.frame(rose_train)
 set.seed(123)
 ### Parameters for Tuning
 ctrl <- trainControl(method = "repeatedcv", 
-                     number = 5,  
+                     number = 10,  
                      repeats = 3,  
                      verboseIter = FALSE,
                      classProbs = TRUE,
