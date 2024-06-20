@@ -411,6 +411,19 @@ lrm_base_model <- train(stroke ~ .,
 # View model summary
 summary(lrm_base_model)
 
+# LogReg Predictions
+predictions <- predict(lrm_base_model, newdata = trainData_ready)
+
+# LogReg Confusion Matrix
+logregCM <- confusionMatrix(predictions, trainData_ready$stroke)
+
+# Confusion Matrix Plot
+conf_matrix <- as.data.frame(logregCM$table)
+ggplot(data = conf_matrix, aes(x = Reference, y = Prediction)) +
+geom_tile(aes(fill = Freq)) +
+geom_text(aes(label = Freq)) +
+scale_fill_gradient(low = 'yellow', high = 'red') +
+labs(title = 'Logistic Regression Model Confusion Matrix', x = 'Actual', y = 'Predicted')
 ```
 
 ## Data Prep
@@ -439,8 +452,17 @@ ldaFit_stroke <- train(stroke ~ .,
                     metric = 'ROC',
                     trControl = ctrl)
 ldaFit_stroke
+# LDA Confusion Matrix
 ldaCM_stroke <- confusionMatrix(ldaFit_stroke, norm = "none")
-ldaCM_stroke
+
+# Confusion Matrix Plot
+conf_matrix <- as.data.frame(ldaCM_stroke$table)
+ggplot(data = conf_matrix, aes(x = Reference, y = Prediction)) +
+geom_tile(aes(fill = Freq)) +
+geom_text(aes(label = Freq)) +
+scale_fill_gradient(low = 'yellow', high = 'green') +
+labs(title = 'Linear Discriminant Analysis Model Confusion Matrix', x = 'Actual', y = 'Predicted')
+
 ```
 
 ### Model #2 - Penalized Logistic Regression (PLR)
@@ -461,7 +483,7 @@ plrFit_stroke <- train(stroke ~ .,
                     metric = 'ROC',
                     trControl = ctrl)
 
-plot(plrFit_stroke)
+plot(plrFit_stroke, main = 'Penalized Logistic Regression')
 
 # Best tuning parameters
 optimal_plr_tune <- plrFit_stroke$bestTune
@@ -485,7 +507,7 @@ nscFit_stroke <- train(stroke ~ .,
                     tuneGrid = nscGrid,
                     metric = 'ROC',
                     trControl = ctrl)
-plot(nscFit_stroke)
+plot(nscFit_stroke, main = 'Nearest Shrunken Centroid')
 
 # Best tuning parameters
 optimal_nsc_tune <- nscFit_stroke$bestTune
@@ -510,7 +532,7 @@ nnFit_stroke <- train(stroke ~ .,
                       trControl = ctrl,
                       tuneGrid = grid, 
                       trace = FALSE)
-plot(nnFit_stroke)
+plot(nnFit_stroke, main = 'Neural Network')
 
 # Best tuning parameters
 optimal_nn_tune <- nnFit_stroke$bestTune
@@ -541,7 +563,7 @@ rfFit_stroke <- train(
 )
 
 # Print the best parameters and performance metrics
-plot(rfFit_stroke)
+plot(rfFit_stroke, main = 'Random Forest')
 
 # Best tuning parameters
 optimal_rf_tune <- rfFit_stroke$bestTune
