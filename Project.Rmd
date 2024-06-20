@@ -7,9 +7,6 @@ output:
   html_document: default
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
 
 ## R Markdown
 
@@ -61,6 +58,7 @@ df_eda <- dplyr::select(df_eda, -id)
 
 print(df_eda)
 ```
+
 ### Histograms
 
 ```{r warning=FALSE, message=FALSE}
@@ -83,7 +81,9 @@ ggplot(df_long, aes(x = value)) +
   labs(title = 'Histograms of Variables Distributions', x = NULL, y = "Count")
 
 ```
+
 ### Corrplot
+
 ```{r warning=FALSE, message=FALSE, fig.width=7,fig.height=6}
 
 numeric_df <- df_eda[sapply(df_eda, is.numeric)]
@@ -92,7 +92,9 @@ numeric_df |>
   ggpairs(title = "Relationship Between Predictors", progress = FALSE)+
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
+
 ### Class Balance
+
 ```{r}
 
 stroke_percent <- prop.table(table(df_eda$stroke)) * 100
@@ -114,7 +116,9 @@ text(x = 1:length(stroke_percent),
      pos = 3)
 
 ```
+
 ### Distributions of Values (Counts)
+
 ```{r}
 
 wrap_text <- function(x, width) {
@@ -150,7 +154,9 @@ walk(plots_list, print)
 
 
 ```
+
 ### Distributions of Values (Percentages)
+
 ```{r}
 
 # Function to create plots
@@ -183,7 +189,9 @@ plots_list <- map(non_numeric_columns, ~ create_plots(.x))
 walk(plots_list, print)
 
 ```
+
 ### Heatmap
+
 ```{r}
 ##### HEAT MAP #### For Feature Selection ################################
 # Numeric Columns for EDA
@@ -219,7 +227,9 @@ testData <- df_eda[-trainIndex, ]
 ```
 
 ## Data Wrangling and Pre-Processing
+
 ### Missing Values
+
 ```{r}
 table(trainData$gender)
 
@@ -251,7 +261,8 @@ colSums(is.na(trainData))
 ```
 
 ### Setting up Factors
-```{r}
+
+```{r factor}
 ### Factor Train
 non_numeric_cols <- sapply(trainData, function(x) !is.numeric(x))  
 # Convert non-numeric columns to factors 
@@ -264,12 +275,14 @@ non_numeric_cols <- sapply(testData, function(x) !is.numeric(x))
 testData <- testData %>%   
   mutate_if(non_numeric_cols, as.factor) 
 
-str(trainData)
-str(testData)
+#str(trainData)
+#str(testData)
 
 ```
+
 ### Dummy Variables
-```{r}
+
+```{r dummy}
 ### dummy variables for Trfactors
 dummy_model1 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence_type + smoking_status, data = trainData)
 
@@ -282,9 +295,10 @@ dummy_model2 <- dummyVars(stroke ~ gender + ever_married + work_type + Residence
 testData_dummy <- as.data.frame(predict(dummy_model2, newdata = testData))
 testData_dummy <- as.data.frame(lapply(testData_dummy, as.factor))
 
-head(trainData_dummy)
-head(testData_dummy)
+#head(trainData_dummy)
+#head(testData_dummy)
 ```
+
 ```{r}
 ### Dropping columns that can be inferred from the others to avoid multicollinearity 
 trainData_dummy <-select(trainData_dummy, -gender.Female, -ever_married.No, -work_type.children, -Residence_type.Rural, -smoking_status.Unknown)
@@ -298,7 +312,8 @@ testData_dummy <-select(testData_dummy, -gender.Female, -ever_married.No, -work_
 testData_selected <- select(testData, age, hypertension, heart_disease, avg_glucose_level, bmi, stroke)
 #str(testData_dummy)
 ```
-```{r}
+
+```{r combo}
 # Train
 trainData_ready <- cbind(trainData_dummy, trainData_selected)
 trainData_ready <- trainData_ready %>%
@@ -317,7 +332,9 @@ names(testData_ready) <- gsub("_Yes", "", names(testData_ready))
 testData_ready$stroke <- as.factor(make.names(as.character(testData_ready$stroke)))
 str(testData_ready)
 ```
+
 ### Class Imbalance (ROSE Method)
+
 ```{r}
 # Calculate counts and convert to data frame
 stroke_counts <- as.data.frame(table(trainData_ready$stroke))
@@ -365,7 +382,9 @@ ggplot(stroke_counts, aes(x = Stroke, y = Count)) +
 
 trainData_ready <- data.frame(rose_train)
 ```
+
 ### Baseline Model to Beat
+
 ```{r}
 set.seed(123)
 ### Parameters for Tuning
@@ -379,6 +398,7 @@ ctrl <- trainControl(method = "repeatedcv",
 ```
 
 ```{r}
+
 ### Base Model Logistic Regression Model
 
 # Fit logistic regression model
@@ -394,7 +414,9 @@ summary(lrm_base_model)
 ```
 
 ## Data Prep
+
 ```{r}
+
 # Exclude stroke and Identify and remove variables with zero variance
 Zero_Var_vars <- nearZeroVar(trainData_ready[, -which(names(trainData_ready) == "stroke"), drop = FALSE])
 trainData_ready <- trainData_ready[, -Zero_Var_vars, drop = FALSE]
@@ -402,9 +424,11 @@ print(names(Zero_Var_vars))
 ```
 
 ## Models
+
 ### Model #1 - Linear Discriminant Analysis (LDR)
 
-```{r}
+```{r m1}
+
 rseed <- 123
 set.seed(rseed)
 # Linear Discriminant Analysis
@@ -421,7 +445,8 @@ ldaCM_stroke
 
 ### Model #2 - Penalized Logistic Regression (PLR)
 
-```{r}
+```{r m2}
+
 set.seed(rseed)
 
 glmnGrid <- expand.grid(alpha = c( 0, .5, 1),
@@ -446,7 +471,8 @@ print(paste('Best Alpha and Lambda tuning parameters for Penalized Logistic Regr
 
 ### Model #3 - Nearest Shrunken Centroids
 
-```{r}
+```{r m3}
+
 set.seed(rseed)
 nscGrid <- data.frame(threshold = seq(2, 7, length = 20))
 
@@ -468,7 +494,8 @@ print(paste('Best threshold tuning parameter for Nearest Shrunken Centroids:', p
 
 ### Model #4 - Neural Network
 
-```{r}
+```{r m4}
+
 set.seed(rseed)
 
 grid <- expand.grid(size = c(1, 5, 8),     # Number of hidden units
@@ -493,7 +520,8 @@ print(paste('Best Size and Decay tuning parameters for Neural Network:', paste(o
 
 ### Model #5 - Random Forest
 
-```{r}
+```{r m5}
+
 # Set seed for reproducibility
 set.seed(rseed)
 
@@ -517,13 +545,12 @@ plot(rfFit_stroke)
 
 # Best tuning parameters
 optimal_rf_tune <- rfFit_stroke$bestTune
-print(paste('Best Size and Decay tuning parameters for Random Forest:', paste(rfFit_stroke, collapse = ',')))
+print(paste('Best Size and Decay tuning parameters for Random Forest:', paste(optimal_rf_tune, collapse = ',')))
 ```
 
 ## Results - Summary Table
 
-```{r}
-###use gt() table for all results
+```{r SumTable}
 
 # 1.Make predictions for Linear Discriminant Analysis
 lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
@@ -573,7 +600,7 @@ accuracies %>%
 
 ### Tuned Models
 
-```{r}
+```{r TunedModel}
 set.seed(rseed)
 # Penalized Logistic Regression with optimal parameters
 plrFit_final <- train(stroke ~ ., 
@@ -602,7 +629,7 @@ set.seed(rseed)
 nnFit_final <- train(stroke ~ .,
                        data = trainData_ready,
                        method = 'nnet',
-                       maxit = 1000,
+                       maxit = 500,
                        preProcess = c('center', 'scale'),  
                        metric = 'ROC',    
                        trControl = ctrl,
@@ -616,6 +643,7 @@ set.seed(rseed)
 rfFit_final <- train(stroke ~ .,
                       data = trainData_ready, 
                       method = "rf", 
+                      ntree = 100,
                       trControl = ctrl,
                       tuneGrid = expand.grid(
                          mtry = optimal_rf_tune$mtry
@@ -625,7 +653,7 @@ rfFit_final <- train(stroke ~ .,
 
 ### Summary for Tuned Models
 
-```{r}
+```{r FinalSum}
 set.seed(rseed)
 # Make predictions for Linear Discriminant Analysis
 lda_pred <- predict(ldaFit_stroke, newdata = testData_ready)
